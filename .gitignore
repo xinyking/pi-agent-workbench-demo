@@ -1,0 +1,39 @@
+.workbench*/
+__pycache__/
+*.pyc
+.venv/
+.env
+
+artifacts/
+
+.venv-ui/
+
+# Local credentials and runtime configuration
+.env.*
+!.env.example
+!.env.*.example
+.aws/
+.codex/
+.pi/auth.json
+.pi/models.json
+.pi/settings.json
+.pi/sessions/
+
+# Local databases, backups, logs and release working copies
+*.sqlite3
+*.sqlite3-*
+*.sqlite
+*.sqlite-*
+*.db
+*.db-*
+*.log
+backups/
+.publish/
+dist/
+build/
+*.egg-info/
+
+# Private development material is not part of the demo release
+docs/
+.agents/
+AGENTS.md

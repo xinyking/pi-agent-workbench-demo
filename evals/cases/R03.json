@@ -1,0 +1,14 @@
+{
+  "id": "R03",
+  "title": "归档失败后仅重试归档",
+  "prompt": "[eval:R03] 生成 result.txt 并提交交付；评测器在首次归档注入权限错误。",
+  "files": {},
+  "allowed_changes": [
+    "result.txt"
+  ],
+  "holdout": [],
+  "schema_version": 1,
+  "split": "development",
+  "level": "offline-pipeline",
+  "success_rule": "all_checks_pass"
+}

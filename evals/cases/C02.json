@@ -1,0 +1,55 @@
+{
+  "id": "C02",
+  "title": "并行双模块修复与独立审查",
+  "prompt": "[eval:C02] 分别修复 discount.py 和 tax.py 的百分比计算，可并行实现，完成后独立审查。",
+  "files": {
+    "discount.py": "def apply_discount(price, percent):\n    return price * (percent / 100)\n",
+    "tax.py": "def add_tax(price, percent):\n    return price * (1 + percent)\n"
+  },
+  "allowed_changes": [
+    "discount.py",
+    "tax.py"
+  ],
+  "holdout": [
+    {
+      "file": "discount.py",
+      "function": "apply_discount",
+      "args": [
+        100,
+        20
+      ],
+      "expected": 80
+    },
+    {
+      "file": "discount.py",
+      "function": "apply_discount",
+      "args": [
+        100,
+        0
+      ],
+      "expected": 100
+    },
+    {
+      "file": "tax.py",
+      "function": "add_tax",
+      "args": [
+        100,
+        20
+      ],
+      "expected": 120
+    },
+    {
+      "file": "tax.py",
+      "function": "add_tax",
+      "args": [
+        50,
+        0
+      ],
+      "expected": 50
+    }
+  ],
+  "schema_version": 1,
+  "split": "development",
+  "level": "offline-pipeline",
+  "success_rule": "all_checks_pass"
+}

@@ -1,0 +1,81 @@
+{
+  "id": "C01",
+  "title": "单模块边界修复",
+  "prompt": "[eval:C01] 修复 batches.py 的分块边界，保留输入与异常语义，仅修改该模块。",
+  "files": {
+    "batches.py": "def batches(items, size):\n    if size <= 0:\n        raise ValueError('size must be positive')\n    return [items[i:i+size] for i in range(0, len(items)-size, size)]\n"
+  },
+  "allowed_changes": [
+    "batches.py"
+  ],
+  "holdout": [
+    {
+      "file": "batches.py",
+      "function": "batches",
+      "args": [
+        [
+          1,
+          2,
+          3,
+          4
+        ],
+        2
+      ],
+      "expected": [
+        [
+          1,
+          2
+        ],
+        [
+          3,
+          4
+        ]
+      ]
+    },
+    {
+      "file": "batches.py",
+      "function": "batches",
+      "args": [
+        [
+          1,
+          2,
+          3
+        ],
+        2
+      ],
+      "expected": [
+        [
+          1,
+          2
+        ],
+        [
+          3
+        ]
+      ]
+    },
+    {
+      "file": "batches.py",
+      "function": "batches",
+      "args": [
+        [],
+        2
+      ],
+      "expected": []
+    },
+    {
+      "file": "batches.py",
+      "function": "batches",
+      "args": [
+        [
+          1
+        ],
+        0
+      ],
+      "raises": "ValueError"
+    }
+  ],
+  "schema_version": 1,
+  "split": "development",
+  "level": "offline-pipeline",
+  "success_rule": "all_checks_pass"
+}

@@ -1,0 +1,9 @@
+[project]
+name = "python-agent-workbench"
+version = "0.6.0"
+description = "Lightweight Pi task center for WSL/Linux"
+requires-python = ">=3.11"
+dependencies = []
+
+[project.optional-dependencies]
+papers = ["pypdf>=6.0,<7"]

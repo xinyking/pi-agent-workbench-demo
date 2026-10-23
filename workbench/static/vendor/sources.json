@@ -1,0 +1,26 @@
+{
+  "marked.mjs": {
+    "package": "marked",
+    "version": "18.0.11",
+    "sha256": "05e41134d075ad3a009a748d6c779c3d83cea9b942be911c2d9abade36d1dd31",
+    "source": "https://github.com/markedjs/marked",
+    "license": "MIT",
+    "modified": false
+  },
+  "temml.mjs": {
+    "package": "temml",
+    "version": "0.14.0",
+    "source": "https://github.com/ronkok/Temml/blob/main/dist/temml.mjs",
+    "git_blob": "af99bd8ca153828aa16e05454ed12c8345ee9460",
+    "sha256": "549e9eea77a15b4311d69e3b271781fbcd478d9ea836d65014faaf6fcc64ccec",
+    "license": "MIT",
+    "modified": false
+  },
+  "temml.css": {
+    "source": "https://github.com/ronkok/Temml/blob/main/dist/Temml-Local.css",
+    "version": "0.14.0",
+    "license": "MIT",
+    "modified": true,
+    "changes": "Removed optional external font-face; use system math fonts."
+  }
+}
