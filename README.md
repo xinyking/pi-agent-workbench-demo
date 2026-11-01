@@ -6,7 +6,7 @@
 
 如果你也想观察 Agent 如何完成一件事，或者正在研究工具、上下文和评测怎样配合，希望这个项目能提供一个可以运行、可以追踪的例子。
 
-[快速开始](#快速开始) · [界面与使用方式](#界面与使用方式) · [代码结构](#代码结构) · [运行验证](#运行验证) · [当前进展](#当前进展与边界)
+[任务中心](#先从任务中心看起) · [评测报告](#任务结束后再看效果与代价) · [架构](#架构)
 
 ### 先从任务中心看起
 
@@ -76,146 +76,19 @@
 
 DeepSeek 官方账户区支持手动查询可用余额、充值余额和赠金。任务只显示一个“估算金额”：优先使用可用的官方人民币价格快照，否则回退已有模型估算并注明币种。余额属于账户，不能通过余额差认定单个任务的实际扣费。
 
-## 快速开始
+## 架构
 
-目前主要在 **WSL/Linux 桌面浏览器**下使用和验证。需要：
-
-- Python 3.11 或更新版本。
-- 已安装且能正常运行的 Pi，当前验证基线为 1.3.0。
-- 一个可用的模型连接。模型授权可在 Pi 中完成，也可以使用工作台的 API 连接设置。
-
-前端使用原生 JavaScript 和 CSS，日常运行不需要 Node.js 或前端构建。PDF 文字提取依赖 `pypdf`，DOCX 和 Markdown 解析使用内置实现。
-
-```bash
-git clone https://github.com/xinyking/pi-agent-workbench-demo.git
-cd pi-agent-workbench-demo
-
-python3 -m venv .venv
-source .venv/bin/activate
-python -m pip install 'pypdf>=6,<7'
-
-pi --version
-./run.sh --port 4310
+```mermaid
+flowchart TB
+    UI[浏览器界面] <-->|HTTP / SSE| Web[Python Web 服务]
+    Web --> Runtime[任务协调与 Agent 协作]
+    Web --> Ops[评测与计费]
+    Runtime --> Context[资料、约束与记忆]
+    Runtime --> Execution[Pi RPC / 外部 CLI]
+    Runtime --> Store[(SQLite 与本地文件)]
+    Context --> Store
+    Ops --> Store
+    Execution --> Models[模型与工具执行]
 ```
 
-打开 [http://localhost:4310](http://localhost:4310)，在设置中添加一个已有项目目录，检查 Pi 环境并选择模型。
-
-Pi 不在 PATH 时，可以指定程序路径：
-
-```bash
-WORKBENCH_PI=/path/to/pi ./run.sh --port 4310
-```
-
-默认本地数据保存在 `.workbench/`。如果要同时运行多个实例，请分别指定端口和数据库，不要让多个服务共用同一个数据目录：
-
-```bash
-./run.sh --port 4312 --data .workbench-test/state.sqlite3
-```
-
-`.env.example` 列出了可选环境变量。工作台不会自动解析 `.env` 文件，需要先将变量加载到启动服务的 Shell 中。
-
-### 第一次可以这样试
-
-找一个可用于试验的小项目，给出边界明确的任务，例如：
-
-```text
-请检查 parser.py 的分页逻辑，修复空输入和最后不足一页的处理。
-只修改相关代码和测试，不调整现有 API。
-先调查现状，再执行修复，最后核对结果并说明验证范围。
-```
-
-在界面中可以依次：
-
-1. 选择工作区，写明目标和限制；有参考资料时勾选需要交接的内容。
-2. 创建并启动任务，查看主 Agent 如何处理，是否需要分派子任务。
-3. 在“需处理”中回答问题，或对文件修改、命令请求作出审批。
-4. 查看轨迹、结果和文件变化，必要时补充要求继续执行。
-5. 打开评测报告，核对已有评测、运行指标和估算金额。
-
-真实任务可能产生模型费用。截图和离线测试均使用演示数据，不需要用自己的资料复现它们。
-
-## 代码结构
-
-项目规模还不大，保留了 Python 标准库 HTTP 服务、SQLite 和原生前端，方便沿着一次请求从页面读到执行层。
-
-```text
-workbench/
-  __main__.py           服务入口
-  runtime.py            任务执行、委派、审批与状态协调
-  store.py              SQLite 与事件记录
-  conversations.py      普通对话与任务交接
-  context/              任务上下文、约束、来源与记忆
-  models/               Pi 连接、模型目录与 API 设置
-  ops/                  评测、用量、计费与交付归档
-  web/                  HTTP 路由与 SSE
-  pi/                   Pi 扩展和工具桥接
-  static/
-    index.html
-    js/                 页面控制器与视图逻辑
-    css/                界面样式
-    vendor/             随项目分发的前端依赖
-
-.pi/agents/             内置角色定义
-skills/task-board/      供其他工具调用的接入技能与脚本
-evals/                  隔离用例与独立评分器
-tests/                  Python / JavaScript 回归和离线样本
-scripts/                评测与浏览器验证入口
-assets/demo/            README 演示截图
-```
-
-如果准备读代码，可以先看 `web/` 中的路由，再看 `runtime.py` 的执行与事件处理。页面从 `static/js/app.js` 组装，任务详情、对话和评测各有对应模块。
-
-模块划分参考了 [Waku](https://github.com/shenseanchen/waku-agent) 对运行、记忆和运维职责的组织。Agent 执行使用 Pi RPC，前端通过 HTTP 与 SSE 读取状态和接收更新。
-
-## 运行验证
-
-普通回归需要 Python 和 Node.js：
-
-```bash
-make test
-# 也可以分别运行
-make test-python
-make test-js
-```
-
-部分集成测试依赖额外环境，缺少时会跳过。已安装 Pi 时，可显式运行本地离线 Provider 测试，覆盖工具循环、委派和审批等流程：
-
-```bash
-WORKBENCH_TEST_REAL_PI=1 make test-python
-```
-
-浏览器验证会创建临时工作区和数据库，再实际操作页面：
-
-```bash
-python -m pip install playwright
-python -m playwright install chromium
-python scripts/verify_ui.py --desktop-only
-```
-
-Chromium 需要相应系统依赖。验证截图和日志写入本机 `artifacts/`，不进入仓库中的运行数据目录。
-
-### 离线评测
-
-`scripts/run_evals.py` 是基础入口，默认只列计划。可选的 DeepEval 评分使用单独环境：
-
-```bash
-python3 -m venv .venv-evals
-.venv-evals/bin/pip install -r evals/requirements.lock
-
-.venv-evals/bin/python scripts/run_deepeval.py --mode offline --judge contract \
-  --output artifacts/evals/local-check
-```
-
-输出目录必须不存在。`contract` 使用合成裁判验证评分协议；它能检查流程和硬门禁是否工作，不能证明真实模型的语义评分正确。`scripts/compare_pi_evals.py` 还提供相同证据上的原生确定性评分器比较，运行依赖位于 `evals/pi_official/`。
-
-我希望逐步补上可复现的真实模型对照，但现阶段不会把离线通过率包装成系统效果提升。
-
-## 当前进展与边界
-
-任务、对话、资料选择、上下文与记忆、执行轨迹、评测报告，以及可选外部执行器入口已经具备。Codex / Claude CLI 需要使用者另行安装并完成授权。
-
-这个项目仍面向个人本机使用。文件修改和命令执行经过工作台审批，Shell 使用当前用户权限，项目目录不等同于操作系统沙箱。建议从一个可备份、范围清楚的工作区开始。
-
-接下来更值得投入的地方是长任务恢复、历史事件分页、评测证据定位，以及同任务、同模型、同预算下的质量与成本对照。OCR、语义检索和独立安全违规检测也仍有缺口。
-
-如果你准备基于它继续开发，欢迎先从一个具体任务出发：找出难以观察或控制的一步，再把需要的事件、交互和验证补齐。
+Python 负责协调任务、审批和事件记录，Pi 承担模型与工具执行。上下文、模型接入和评测分别放在 `context/`、`models/`、`ops/`；前端使用原生 JavaScript 和 CSS，通过 SSE 接收执行进度。
