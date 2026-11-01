@@ -136,7 +136,7 @@ class MemoryServiceTests(unittest.TestCase):
         first=self.catalog(text='以后输出用中文',scope='global');entry=first['items'][0]
         self.catalog(text='禁止联网',scope='global')
         with self.assertRaises(ValueError):self.memory.manage({'revision':first['revision'],'action':'clear','confirm':True})
-        with patch('workbench.memory_service.time.time',return_value=entry['expires']+1):self.assertFalse(self.memory.catalog()['items'])
+        with patch('workbench.context.memory.time.time',return_value=entry['expires']+1):self.assertFalse(self.memory.catalog()['items'])
         self.catalog(text='以后输出用中文',scope='global')
         self.catalog(action='clear',confirm=True)
         self.assertFalse(self.memory.catalog()['items'])

@@ -12,7 +12,7 @@ import time
 from pathlib import Path
 ROOT=Path(__file__).resolve().parents[1];sys.path.insert(0,str(ROOT));sys.path.insert(0,str(ROOT/'tests'))
 from fixtures.document_samples import pdf_bytes,docx_bytes
-from workbench.pi_client import PiClient
+from workbench.models.pi import PiClient
 from workbench.runtime import Runtime
 from workbench.store import Store
 from workbench.__main__ import WorkbenchServer,make_handler

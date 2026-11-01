@@ -21,12 +21,14 @@ def dialog(request):
             return answer
 
 
-def finish(text, error=None, report=True):
+def finish(text, error=None, report=True, observation=False):
     if report and not error and os.environ.get('WORKBENCH_CHILD') != '1':
         emit({'type': 'extension_ui_request', 'method': 'notify', 'message': '__workbench_finish__' + json.dumps({'summary': text})})
+    if observation:
+        dialog({'type':'extension_ui_request','id':'memory-assembly','method':'input','title':'__workbench_memory__','placeholder':json.dumps({'action':'assemble'})})
     emit({'type': 'message_start', 'message': {'role': 'assistant'}})
     emit({'type': 'message_update', 'assistantMessageEvent': {'type': 'text_delta', 'delta': text}})
-    emit({'type': 'message_end', 'message': {'role': 'assistant', 'content': [{'type': 'text', 'text': text}], 'stopReason': 'error' if error else 'stop', 'errorMessage': error, 'usage': {'input': 2, 'output': 1, 'totalTokens': 3}}})
+    emit({'type': 'message_end', 'message': {'role': 'assistant', 'content': [{'type': 'text', 'text': text}], 'stopReason': 'error' if error else 'stop', 'errorMessage': error, 'provider':'fixture', 'model':'fixture-model', 'usage': {'input': 2, 'output': 1, 'totalTokens': 3, **({'cacheRead':4,'cacheWrite':5,'cost':{'total':0.0012}} if observation else {})}}})
     emit({'type': 'agent_end', 'willRetry': False})
     emit({'type': 'agent_settled', 'aborted': False})
 
@@ -75,7 +77,7 @@ for line in sys.stdin.buffer:
             gate = Path(os.environ['FAKE_PI_GATE'])
             while not gate.exists():
                 time.sleep(.01)
-        finish('已完成\u2028可观察结果', '子任务失败' if '[fail]' in prompt else None, report='[unreported]' not in prompt)
+        finish('已完成\u2028可观察结果', '子任务失败' if '[fail]' in prompt else None, report='[unreported]' not in prompt, observation='[observe]' in prompt)
         continue
     elif kind == 'abort':
         break

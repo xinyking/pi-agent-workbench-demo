@@ -3,6 +3,8 @@ import re
 import time
 from urllib.parse import urlparse, parse_qs, quote
 from .common import ID, STATIC, STREAM_TERMINAL
+from workbench.ops.evaluation import task_review, evaluation_events
+from workbench.ops.billing import task_estimate, official_base
 
 class QueryRoutes:
 
@@ -18,10 +20,26 @@ class QueryRoutes:
             return self.reply(self.runtime.models.public())
         if url.path == '/api/executors':
             return self.reply(self.runtime.executors.capabilities())
+        if url.path == '/api/billing/deepseek':
+            return self.reply(self.runtime.billing.public())
         if url.path == '/api/config':
             return self.reply(self.runtime.config.public())
         if url.path == '/api/board':
-            return self.reply(self.runtime.board())
+            board = self.runtime.board()
+            official = tuple('wbapi-' + p['id'] for p in self.runtime.models.read()['providers'] if official_base(p['base_url']))
+            for task in board['tasks']:
+                task['evaluation'] = task_review(self.store, task['id'])
+                task['deepseek_estimate'] = task_estimate(self.store, task, official)
+            return self.reply(board)
+        if url.path == '/api/evaluations':
+            with self.store.lock:
+                tasks = self.runtime.board()['tasks']
+                official = tuple('wbapi-' + p['id'] for p in self.runtime.models.read()['providers'] if official_base(p['base_url']))
+                for task in tasks:
+                    task['evaluation'] = task_review(self.store, task['id'])
+                    task['evaluation_events'] = evaluation_events(self.store, task['id'])
+                    task['deepseek_estimate'] = task_estimate(self.store, task, official)
+            return self.reply({'tasks': tasks})
         if url.path == '/api/conversations':
             return self.reply({'conversations': self.runtime.conversations.list()})
         chat_parts = url.path.strip('/').split('/')
@@ -104,6 +122,9 @@ class QueryRoutes:
             except ValueError as exc:
                 return self.reply({'error': str(exc)}, 404)
             if len(parts) == 3:
+                run['evaluation'] = task_review(self.store, run['id'])
+                official = tuple('wbapi-' + p['id'] for p in self.runtime.models.read()['providers'] if official_base(p['base_url']))
+                run['deepseek_estimate'] = task_estimate(self.store, run, official)
                 return self.reply({'run': run, 'approvals': self.store.approvals(run['id']), 'agents': self.store.agents(run['id']), 'inputs': self.store.inputs(run['id'])})
             if parts[3] == 'context':
                 try: return self.reply(self.runtime.executors.overview(run['id']) if run['provider_id'] in ('codex','claude') else {**self.runtime.task_context.overview(run['id']),'source_packet':self.runtime.sources.get(run['id'])})
@@ -120,7 +141,7 @@ class QueryRoutes:
                             outputs.append(event)
                 return self.reply({'outputs': outputs})
             if parts[3] == 'archive':
-                from ..archives import read_archive
+                from workbench.ops.archives import read_archive
                 try:
                     return self.reply(read_archive(self.store, run, self.runtime.config.workspace(run['workspace'])))
                 except (OSError, ValueError) as exc:
@@ -133,7 +154,13 @@ class QueryRoutes:
                 except ValueError:
                     return self.reply({'error': '无效事件编号'}, 400)
                 return self.run_stream(run['id'], after)
-        names = {'/source-form.mjs':'source-form.mjs','/source-packet-view.mjs':'source-packet-view.mjs','/model-discovery.mjs':'model-discovery.mjs','/model-settings.mjs':'model-settings.mjs','/model-choices.mjs':'model-choices.mjs','/executor-form.mjs':'executor-form.mjs','/memory-settings.mjs':'memory-settings.mjs','/task-context.mjs':'task-context.mjs','/board-controller.mjs':'board-controller.mjs','/task-detail-controller.mjs':'task-detail-controller.mjs','/chat-controller.mjs':'chat-controller.mjs','/view-session.mjs':'view-session.mjs','/task-timeline.mjs': 'task-timeline.mjs', '/api.mjs': 'api.mjs', '/settings.mjs': 'settings.mjs', '/preferences.mjs': 'preferences.mjs', '/': 'index.html', '/app.js': 'app.js', '/flow.mjs': 'flow.mjs', '/timeline.mjs': 'timeline.mjs', '/sidebar.mjs': 'sidebar.mjs', '/trace.mjs': 'trace.mjs', '/markdown.mjs': 'markdown.mjs', '/progress.mjs': 'progress.mjs', '/vendor/temml.mjs': 'vendor/temml.mjs', '/vendor/temml.css': 'vendor/temml.css', '/workspace-picker.mjs': 'workspace-picker.mjs', '/vendor/marked.mjs': 'vendor/marked.mjs', '/style.css': 'style.css', '/chat.css': 'chat.css'}
+        names = {'/': 'index.html'}
+        for directory, suffixes in [('js', ('.js', '.mjs')), ('css', ('.css',))]:
+            for asset in (STATIC / directory).iterdir():
+                if asset.is_file() and asset.suffix in suffixes:
+                    names['/' + asset.name] = directory + '/' + asset.name
+        for name in ('temml.mjs', 'temml.css', 'marked.mjs'):
+            names['/vendor/' + name] = 'vendor/' + name
         if url.path not in names:
             return self.reply({'error': '不存在'}, 404)
         file = STATIC / names[url.path]

@@ -150,6 +150,14 @@ def main():
                 review_size(1440,1000)
                 send('三年 Python 开发经验，目标杭州，不考虑外包')
                 expect(page.locator('.chat-assistant').last).to_contain_text('普通回答')
+                page.locator('[data-chat-view="trace"]').click()
+                expect(page.locator('#trace-entries .waterfall-axis')).to_contain_text('耗时')
+                model_step=page.locator('#trace-entries .trace-entry[data-kind="model"]').first
+                expect(model_step.locator('.waterfall-duration')).not_to_have_text('—')
+                model_step.locator(':scope > summary').click()
+                expect(model_step).to_contain_text('输入 2')
+                expect(model_step).to_contain_text('费用未知')
+                page.locator('#chat-trace-close').click()
                 sidebar=page.locator('.sidebar').bounding_box()
                 assert 250<=sidebar['width']<=260,sidebar
                 nav_weights=page.locator('.sidebar .nav').evaluate_all('(nodes)=>nodes.map(n=>getComputedStyle(n).fontWeight)')
@@ -297,12 +305,18 @@ def main():
                 expect(page.locator('#chat-task-open')).to_be_visible()
                 wait_for(lambda:not runtime.active)
                 page.locator('#chat-task-open').click()
+                expect(page.locator('#tab-records')).to_have_attribute('aria-selected','true')
+                page.locator('#tab-files').click()
+                expect(page.locator('#task-archive')).to_be_visible()
+                page.locator('#tab-flow').click()
                 expect(page.locator('#flow-canvas')).to_be_visible()
                 expect(page.locator('.flow-node').first).to_be_visible()
+                page.locator('#tab-files').click()
                 expect(page.locator('#task-archive')).to_be_visible()
                 page.locator('#task-archive summary').click()
                 expect(page.locator('#task-archive .markdown-body')).to_contain_text('任务完成总结')
                 page.locator('#task-archive summary').click()
+                page.locator('#tab-flow').click()
                 stages=page.locator('#flow-rows .flow-row')
                 if stages.count()>1:
                     expect(stages.nth(1)).to_be_visible()
@@ -361,6 +375,7 @@ def main():
                 wait_for(lambda:not runtime.active)
                 expect(page.locator('#detail-actions .status')).to_have_text('已完成',timeout=15000)
                 expect(page.locator('#detail-actions .status')).to_have_attribute('data-status','completed')
+                page.locator('#tab-flow').click()
                 flow=page.locator('#flow-canvas')
                 dimensions=flow.evaluate('(e)=>({width:e.clientWidth,content:e.scrollWidth,height:e.clientHeight,contentHeight:e.scrollHeight})')
                 assert dimensions['content']>dimensions['width'],dimensions
@@ -369,15 +384,13 @@ def main():
                 flow.evaluate('(e)=>e.scrollLeft=0')
                 capture('horizontal-flow.png')
                 page.locator('#tab-records').click()
-                expect(page.locator('#events .timeline-agent').first).to_be_visible()
-                if page.locator('#events .timeline-agent').first.get_attribute('open') is None:
-                    page.locator('#events .timeline-agent').first.locator(':scope > summary').click()
-                expect(page.locator('#events .event').first).to_be_visible()
-                left=page.locator('#messages').bounding_box()
-                right=page.locator('#events').bounding_box()
-                assert right['x']>left['x']+left['width'],(left,right)
-                assert abs(left['y']-right['y'])<2,(left,right)
-                keys=page.locator('#events .timeline-agent').evaluate_all('(nodes)=>nodes.map(n=>n.dataset.timelineKey)')
+                expect(page.locator('#events .waterfall-entry').first).to_be_visible()
+                expect(page.locator('#events .waterfall-axis')).to_contain_text('耗时')
+                assert all(__import__('re').fullmatch(r'\d+\.\d{2}s',t) for t in page.locator('#events .waterfall-clock').all_text_contents())
+                assert page.locator('#events').evaluate('(e)=>e.clientWidth')>900
+                page.locator('#events .waterfall-entry').first.locator(':scope > summary').click()
+                expect(page.locator('#events .waterfall-body').first).to_be_visible()
+                keys=page.locator('#events .waterfall-entry').evaluate_all('(nodes)=>nodes.map(n=>n.dataset.timelineKey)')
                 assert len(keys)==len(set(keys)),keys
                 expect(page.locator('#followup-form')).not_to_be_visible()
                 capture('task-records.png')
@@ -448,7 +461,9 @@ def main():
                 expect(page.locator('#pi-status')).to_contain_text('ui-fixture')
                 capture('settings-models.png')
                 page.locator('[data-settings-tab="usage"]').click()
-                expect(page.locator('#settings-usage-grid > div')).to_have_count(4)
+                expect(page.locator('#settings-usage-grid > div')).to_have_count(8)
+                expect(page.locator('#settings-usage-grid')).to_contain_text('费用未知的记录')
+                expect(page.locator('#settings-usage-grid')).to_contain_text('缓存读取 Tokens')
                 expect(page.locator('#usage')).to_contain_text('Tokens')
                 capture('settings-usage.png')
                 page.locator('[data-settings-tab="permissions"]').click()
@@ -557,9 +572,7 @@ def main():
                 page.locator('#tab-records').click()
                 expect(page.locator('#messages')).to_contain_text('检查通过，外部执行结果已经回到任务中心')
                 expect(page.locator('#detail-error')).to_be_hidden()
-                expect(page.locator('#events .timeline-agent')).to_have_count(1)
-                page.locator('#events .timeline-agent > summary').click()
-                expect(page.locator('#events')).to_contain_text('结果已回传')
+                expect(page.locator('#events .waterfall-entry > summary').filter(has_text='正在核查外部结果').first).to_be_visible()
                 capture('external-task-results.png')
                 page.locator('[data-close="detail-dialog"]').click()
                 expect(page.locator('#lane-done .task').filter(has_text='外部工具读取结果回传验证')).to_be_visible()
@@ -599,13 +612,30 @@ def main():
                     assert page.evaluate("window.__ownedStreams.filter(s=>s.url.includes('/api/runs/')).every(s=>s.closed)")
                 # Task memory: real HTTP/UI edits, stale revisions, source projection and navigation.
                 memory_task=runtime.create('上下文管理验收：整理本地资料',str(workspace))
-                runtime.task_context.assemble(memory_task)
+                initial_assembly=runtime.task_context.assemble(memory_task, 'main', 'ui-observe')
+                runtime.emit(memory_task,'usage',{'model':'本地计价样本','provider':'fixture','agent_id':'main','attempt_id':'ui-observe','assembly_id':initial_assembly['assembly_id'],'prompt_tokens':100,'completion_tokens':20,'total_tokens':150,'cache_read_tokens':30,'cache_write_tokens':0,'cost_usd':0.0012,'cost_source':'pi_model_rates'})
+                runtime.emit(memory_task,'usage',{'model':'未计价样本','agent_id':'child-observe','attempt_id':'ui-child','prompt_tokens':10,'completion_tokens':2,'total_tokens':12})
                 runtime.task_context.offload(memory_task,'main',{'text':'原始工具资料\n'*1500,'name':'read','tool_call_id':'ui-large-read'})
                 page.reload(wait_until='load')
                 memory_card=page.locator('#board .task').filter(has_text='上下文管理验收：整理本地资料')
                 expect(memory_card).to_be_visible();memory_card.click()
+                page.locator('#tab-records').click()
+                page.locator('#events select[aria-label="执行轮次"]').select_option('all')
+                expect(page.locator('#events .task-usage')).to_contain_text('2 条模型用量记录')
+                expect(page.locator('#events .task-usage')).to_contain_text('US$0.001200')
+                expect(page.locator('#events .task-usage')).to_contain_text('1 条费用未知')
+                usage_entry=page.locator('#events .waterfall-entry').filter(has=page.locator('summary',has_text='模型用量与费用')).first
+                usage_entry.locator(':scope > summary').click()
+                expect(usage_entry).to_contain_text(initial_assembly['assembly_id'])
+                capture('task-usage-cost.png')
+                assembly_entry=page.locator('#events .waterfall-entry').filter(has=page.locator('summary',has_text='调用前组装记忆')).first
+                assembly_entry.locator(':scope > summary').click()
+                assembly_entry.get_by_role('button',name='查看注入快照').click()
+                expect(page.locator('#tab-context')).to_have_attribute('aria-selected','true')
+                expect(page.locator(f'.assembly-history details[data-assembly-id="{initial_assembly["assembly_id"]}"]')).to_have_attribute('open','')
                 page.locator('#tab-context').click()
                 expect(page.locator('#task-context-content')).to_contain_text('任务目标')
+                expect(page.locator('.assembly-history details')).to_have_count(1)
                 draft=page.locator('[data-memory-draft]');draft.fill('禁止联网，交付使用中文')
                 page.get_by_role('button',name='保存约束',exact=True).click()
                 expect(page.locator('.memory-item')).to_contain_text('禁止联网，交付使用中文')
@@ -618,6 +648,12 @@ def main():
                 expect(page.locator('[data-memory-draft]')).to_have_value('尚未提交的要求草稿')
                 expect(page.locator('[data-memory-draft]')).to_be_focused()
                 expect(page.locator('#task-context-content')).to_contain_text('Agent 工作笔记')
+                expect(page.locator('.assembly-history details')).to_have_count(2)
+                history=page.locator('.assembly-history details').first
+                history.locator('summary').click()
+                expect(history).to_contain_text('已读取附件目录')
+                history.scroll_into_view_if_needed()
+                capture('memory-injection-history.png')
                 # Compare a stale version through the real API; the existing user constraint survives.
                 response=page.request.post(host+f'/api/runs/{memory_task}/context',data={'revision':1,'kind':'constraint','text':'过时覆盖'})
                 assert response.status==400,response.text()
@@ -626,6 +662,7 @@ def main():
                 page.locator('[data-memory-draft]').fill('只使用本地 PDF，交付使用中文')
                 page.get_by_role('button',name='保存修改',exact=True).click()
                 expect(page.locator('.memory-item').filter(has_text='只使用本地 PDF')).to_be_visible()
+                expect(page.locator('.assembly-history details').first).to_have_attribute('open','')
                 page.locator('#detail-dialog .dialog-scroll').evaluate('(e)=>e.scrollTop=0')
                 capture('task-context-overview.png')
                 expect(page.locator('#task-context-content')).to_contain_text('当前记忆已更新')
@@ -644,6 +681,130 @@ def main():
                 expect(page.locator('.memory-item').filter(has_text='只使用本地 PDF')).to_have_count(0)
                 page.locator('[data-close="detail-dialog"]').click()
                 capture('controller-navigation.png')
+                # Synthetic evidence: Agent completed, followed by a failed plan check.
+                failure_task=runtime.create('轨迹验收：执行结束后的计划校验',str(workspace))
+                reason='计划仍有未完成步骤，请继续处理'
+                base=time.time()-120
+                fixture=[
+                    (0,'agent.started',{'role':'主 Agent','task':'历史轮次验收','attempt_id':'old','status':'running'}),
+                    (1,'tool.started',{'attempt_id':'old','id':'same','name':'旧轮次读取'}),
+                    (4,'tool.completed',{'attempt_id':'old','id':'same','name':'旧轮次读取'}),
+                    (5,'agent.completed',{'attempt_id':'old','status':'completed'}),
+                    (20,'agent.started',{'role':'主 Agent','task':'当前轮次验收','attempt_id':'current','status':'running'}),
+                    (21,'pi.turn_start',{}),(22,'message.started',{}),
+                    (39,'message.completed',{'text':'已完成本轮分析，准备写入报告。'}),
+                    (39.1,'usage',{'model':'本地验收模型','total_tokens':120,'prompt_tokens':100,'completion_tokens':20,'cost_usd':.0012}),
+                    (40,'tool.started',{'id':'same','name':'read','arguments':{'path':'notes.md'}}),
+                    (41,'tool.started',{'id':'write','name':'write','arguments':{'path':'report.md'}}),
+                    (43,'tool.completed',{'id':'same','name':'read','result':{'content':[{'type':'text','text':'已读取资料'}]}}),
+                    (44,'approval.requested',{'id':'approval','name':'write'}),
+                    (58,'approval.resolved',{'id':'approval','decision':'approved'}),
+                    (60,'tool.completed',{'id':'write','name':'write','result':{'content':[{'type':'text','text':'报告已保存'}]}}),
+                    (61,'pi.turn_start',{}),(62,'message.started',{}),
+                    (80,'message.completed',{'text':'本轮报告已交付。'}),
+                    (80.1,'usage',{'model':'本地验收模型','total_tokens':50,'prompt_tokens':40,'completion_tokens':10}),
+                    (81,'task.reported',{'summary':'报告内容已生成；计划步骤仍待核对。'}),
+                    (82,'agent.completed',{'status':'completed'}),
+                    (82.1,'error',{'text':reason}),(82.2,'status',{'status':'failed','reason':reason})]
+                for offset,kind,data in fixture:
+                    runtime.emit(failure_task,kind,{'agent_id':'main','attempt_id':data.get('attempt_id','current'),**data})
+                    with store.lock,store.db:
+                        store.db.execute('UPDATE events SET created=? WHERE id=(SELECT MAX(id) FROM events WHERE run_id=?)',(base+offset,failure_task))
+                page.reload(wait_until='load')
+                page.locator('#board .task').filter(has_text='轨迹验收：执行结束后的计划校验').click()
+                expect(page.locator('#tab-records')).to_have_attribute('aria-selected','true')
+                expect(page.locator('#task-outcome')).to_contain_text('收尾校验失败')
+                expect(page.locator('#task-outcome')).to_contain_text(reason)
+                expect(page.locator('#events .waterfall-entry > summary').filter(has_text='旧轮次读取')).to_have_count(0)
+                page.locator('#events select[aria-label="执行轮次"]').select_option('all')
+                expect(page.locator('#events .waterfall-entry > summary').filter(has_text='旧轮次读取')).to_be_visible()
+                page.locator('#tab-flow').click()
+                page.get_by_role('button',name='定位失败步骤',exact=True).click()
+                failure=page.locator('#events .waterfall-entry[data-status="failed"]').last
+                expect(failure).to_have_attribute('open','')
+                expect(failure).to_contain_text(reason)
+                expect(page.locator('#events select[aria-label="执行轮次"]')).to_have_value('latest')
+                for width in [1280,1440,1920]:
+                    review_size(width,1000)
+                    assert page.locator('#pane-records').evaluate('(e)=>e.scrollWidth<=e.clientWidth+1')
+                    page.locator('#detail-dialog .dialog-scroll').evaluate('(e)=>e.scrollTop=0')
+                    capture(f'waterfall-failure-{width}.png')
+                # Opening a step survives another render, and keyboard tabs still work.
+                tool=page.locator('#events .waterfall-entry[data-kind="tool"]').first
+                tool.locator(':scope > summary').click()
+                page.locator('#tab-records').click()
+                expect(tool).to_have_attribute('open','')
+                page.locator('#tab-records').focus();page.keyboard.press('ArrowRight')
+                expect(page.locator('#tab-files')).to_have_attribute('aria-selected','true')
+                expect(page.locator('#task-delivery')).to_contain_text('报告内容已生成')
+                page.locator('#tab-flow').click()
+                capture('task-overview.png')
+                page.locator('[data-close="detail-dialog"]').click()
+                # Numeric-only chat metadata with a normal turn and a failed retry.
+                trace_chat=runtime.conversations.create('chat',str(workspace))['id']
+                runtime.conversations.message(trace_chat,'user','对话时间轴验收（构造数据）')
+                runtime.conversations.message(trace_chat,'assistant','本轮过程仅用于界面验收。')
+                base=time.time()-86490
+                samples=[(0,'request.started',{}),(1,'model.started',{}),(2,'message.started',{}),(3,'memory.assembled',{}),
+                    (15,'model.completed',{'provider':'fixture','model':'本地验收模型','prompt_tokens':100,'completion_tokens':20,'total_tokens':120,'cache_read_tokens':0,'cache_write_tokens':0,'cost_usd':.0012}),
+                    (16,'tool.started',{'id':'read','name':'workbench_document','arguments':{'action':'read','path':'example.md'}}),
+                    (20,'tool.completed',{'id':'read','name':'workbench_document','is_error':False}),
+                    (21,'model.started',{}),(22,'message.started',{}),
+                    (40,'model.completed',{'provider':'fixture','model':'本地验收模型','prompt_tokens':40,'completion_tokens':10,'total_tokens':50,'cost_usd':None}),
+                    (41,'request.completed',{'status':'completed'}),
+                    (86450,'request.started',{}),(86451,'model.started',{}),(86452,'message.started',{}),
+                    (86456,'model.completed',{'provider':'fixture','model':'失败验收模型','total_tokens':0,'cost_usd':None,'stop_reason':'error'}),
+                    (86457,'request.completed',{'status':'failed'})]
+                for offset,kind,data in samples:
+                    runtime.conversations.execution(trace_chat,kind,data)
+                    with store.lock,store.db:store.db.execute('UPDATE conversation_events SET created=? WHERE id=(SELECT MAX(id) FROM conversation_events WHERE conversation_id=?)',(base+offset,trace_chat))
+                runtime.conversations.status(trace_chat,'failed')
+                page.reload(wait_until='load')
+                page.locator(f"[data-sidebar-key='{trace_chat}'] .conversation-open").click()
+                page.locator('[data-chat-view="trace"]').click()
+                expect(page.locator('#trace-entries .trace-entry[data-kind="model"]')).to_have_count(1)
+                choose_select('trace-turn','all')
+                expect(page.locator('#trace-entries .trace-entry[data-kind="model"]')).to_have_count(3)
+                expect(page.locator('#trace-summary')).to_contain_text('US$0.001200')
+                expect(page.locator('#trace-entries .trace-run-heading')).to_have_count(2)
+                expect(page.locator('#trace-entries .waterfall-axis')).to_have_count(2)
+                expect(page.locator('#trace-entries .trace-run-heading').first).to_contain_text('41.00s')
+                expect(page.locator('#trace-entries .trace-run-heading').last).to_contain_text('7.00s')
+                before=page.locator('#trace-entries .trace-run-heading').all_text_contents()
+                page.evaluate('()=>{const later=Date.now()+86400000;Date.now=()=>later;}')
+                page.locator('[data-chat-view="trace"]').click()
+                assert before==page.locator('#trace-entries .trace-run-heading').all_text_contents()
+                step=page.locator('#trace-entries .trace-entry[data-kind="model"]').first
+                step.locator(':scope > summary').click()
+                expect(step).to_contain_text('记忆组装完成至模型回复结束')
+                prep=page.locator('#trace-entries .trace-entry').filter(has=page.locator('summary',has_text='调用前准备（含记忆组装）'))
+                expect(prep.locator('.waterfall-duration')).to_have_text('2.00s')
+                expect(step.locator('.waterfall-clock')).to_have_text('3.00s')
+                expect(step.locator('.waterfall-duration')).to_have_text('12.00s')
+                kinds=page.locator('#trace-entries .trace-entry').evaluate_all('(nodes)=>nodes.map(n=>n.dataset.kind)')
+                assert kinds.index('memory') < kinds.index('model')
+                assert all(__import__('re').fullmatch(r'\d+\.\d{2}s',t) for t in page.locator('#trace-entries .waterfall-clock').all_text_contents())
+                choose_select('trace-kind','models')
+                expect(page.locator('#trace-entries .trace-entry')).to_have_count(3)
+                choose_select('trace-kind','failed')
+                expect(page.locator('#trace-entries .trace-entry')).to_have_count(2)
+                choose_select('trace-kind','all')
+                expect(step).to_have_attribute('open','')
+                capture('chat-waterfall-step.png')
+                step.locator(':scope > summary').click()
+                for width in [1280,1440,1920]:
+                    review_size(width,1000)
+                    assert page.locator('#chat-trace').evaluate('(e)=>e.scrollWidth<=e.clientWidth+1')
+                    page.locator('#trace-entries').evaluate('(e)=>e.scrollTop=0')
+                    capture(f'chat-waterfall-{width}.png')
+                # Chat trace is also readable at narrow widths, independently of mobile board checks.
+                page.set_viewport_size({'width':390,'height':1000})
+                assert page.locator('#chat-trace').evaluate('(e)=>e.scrollWidth<=e.clientWidth+1')
+                expect(page.locator('#chat-trace-close')).to_be_in_viewport()
+                page.screenshot(path=str(args.output/'chat-waterfall-390.png'),full_page=True)
+                page.set_viewport_size({'width':1440,'height':1000})
+                page.locator('[data-chat-view="conversation"]').click()
+                expect(page.locator('.chat-assistant')).to_contain_text('本轮过程仅用于界面验收')
                 assert not errors,errors
                 browser.close()
             print('PASS: 双模式、附件、编排、审批与文件差异、轨迹、长对话滚动恢复、草稿、焦点及脚本；布局模式：'+('桌面 1280/1440/1920px' if args.desktop_only else '桌面与小屏'))

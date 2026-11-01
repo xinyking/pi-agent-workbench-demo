@@ -9,7 +9,7 @@ from pathlib import Path
 from unittest.mock import patch
 from workbench.store import Store
 from workbench.runtime import Runtime
-from workbench.pi_client import PiClient
+from workbench.models.pi import PiClient
 
 
 @unittest.skipUnless(os.environ.get('WORKBENCH_TEST_REAL_PI') == '1' and shutil.which('pi'), 'set WORKBENCH_TEST_REAL_PI=1 to test installed Pi without model calls')
@@ -117,6 +117,12 @@ class RealPiTests(unittest.TestCase):
         self.assertEqual(sessions[0]['session_id'],sessions[1]['session_id'])
         self.assertGreater(sessions[1]['message_count'],sessions[0]['message_count'])
         self.assertIn('历史用户消息数：2',chats.get(chat_id)['messages'][-1]['text'])
+        execution=chats.get(chat_id)['execution']
+        self.assertTrue(any(e['kind']=='model.started' for e in execution))
+        finished=[e for e in execution if e['kind']=='model.completed']
+        self.assertGreaterEqual(len(finished),2)
+        self.assertTrue(all('total_tokens' in e and 'cost_usd' in e and 'text' not in e for e in finished))
+        self.assertEqual(execution[-1]['kind'],'request.completed')
 
     def test_actual_pi_conversation_creates_task_with_readable_context(self):
         chats=self.runtime.conversations
@@ -234,6 +240,14 @@ class RealPiTests(unittest.TestCase):
         events=self.store.events(run_id)
         self.assertGreaterEqual(len([e for e in events if e['kind']=='memory.assembled']),10)
         self.assertTrue(any(e['kind']=='memory.offloaded' for e in events))
+        assembled={e['data']['assembly_id']:e['data'] for e in events if e['kind']=='memory.assembled'}
+        usage=[e['data'] for e in events if e['kind']=='usage']
+        self.assertTrue(usage)
+        for record in usage:
+            self.assertIn(record['assembly_id'], assembled)
+            self.assertEqual(record['attempt_id'], assembled[record['assembly_id']]['attempt_id'])
+            self.assertIn('cache_read_tokens',record)
+            self.assertIn('cost_source',record)
 
     def test_real_pi_grounded_constraints_and_confirmed_cross_task_memory(self):
         policy=self.runtime.memory.policy()

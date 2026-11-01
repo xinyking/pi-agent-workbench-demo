@@ -128,12 +128,8 @@ class Store:
     def usage(self):
         with self.lock:
             rows = self.db.execute("SELECT data FROM events WHERE kind='usage'").fetchall()
-        result = {'requests': len(rows), 'prompt_tokens': 0, 'completion_tokens': 0, 'total_tokens': 0}
-        for row in rows:
-            data = json.loads(row['data'])
-            for key in ('prompt_tokens', 'completion_tokens', 'total_tokens'):
-                result[key] += data.get(key, 0) or 0
-        return result
+        from workbench.ops.usage import summarize
+        return summarize(json.loads(row['data']) for row in rows)
 
     def cursor(self):
         with self.lock:

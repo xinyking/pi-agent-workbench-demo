@@ -23,6 +23,8 @@ class MutationRoutes:
             data = json.loads(self.rfile.read(length))
             if not isinstance(data, dict):
                 raise ValueError('需要 JSON 对象')
+            if self.path == '/api/billing/deepseek/refresh':
+                return self.reply(self.runtime.billing.refresh(data.get('source')))
             if self.path == '/api/conversations':
                 return self.reply(self.runtime.conversations.create(data.get('mode'), data.get('workspace') or '', data.get('model') or ''), 201)
             chat_parts = self.path.strip('/').split('/')

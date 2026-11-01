@@ -6,7 +6,7 @@ import unittest
 from pathlib import Path
 from workbench.runtime import Runtime
 from workbench.store import Store
-from workbench.task_context import ASSEMBLY_BYTE_BUDGET
+from workbench.context.task import ASSEMBLY_BYTE_BUDGET
 
 
 class TaskContextTests(unittest.TestCase):

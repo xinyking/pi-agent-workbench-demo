@@ -49,6 +49,24 @@ class ConversationTests(unittest.TestCase):
         sessions=[e['data']['session_id'] for e in self.chats.events(chat_id) if e['kind']=='session.connected']
         self.assertEqual(len(sessions),2);self.assertEqual(sessions[0],sessions[1])
 
+    def test_chat_trace_records_model_usage_and_end_without_answer_text(self):
+        chat_id=self.chat();self.send(chat_id,'验证模型阶段记录')
+        records=self.chats.get(chat_id)['execution']
+        usage=next(e for e in records if e['kind']=='model.completed')
+        self.assertEqual(usage['total_tokens'],3)
+        self.assertIsNone(usage['cost_usd'])
+        self.assertNotIn('text',usage)
+        self.assertEqual(records[-1]['kind'],'request.completed')
+        self.assertEqual(records[-1]['status'],'completed')
+
+    def test_usage_metadata_does_not_expand_trace_into_tool_or_message_bodies(self):
+        chat_id=self.chat()
+        self.chats.execution(chat_id,'usage',{'model':'m','provider':'p','total_tokens':12,'cost_usd':.02,'text':'private reply','result':'private tool output','reason':'private failure','arguments':{'token':'secret','path':'example.md'}})
+        record=self.chats.get(chat_id)['execution'][-1]
+        self.assertEqual(record['cost_usd'],.02)
+        self.assertEqual(record['arguments'],{'path':'example.md'})
+        for key in ('text','result','reason'):self.assertNotIn(key,record)
+
     def test_rename_is_persistent_and_not_overwritten_by_first_message(self):
         chat_id=self.chat()
         self.chats.rename(chat_id,'新对话')

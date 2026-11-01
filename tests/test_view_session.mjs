@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {createViewSession} from '../workbench/static/view-session.mjs';
+import {createViewSession} from '../workbench/static/js/view-session.mjs';
 
 test('switching identity invalidates delayed responses and closes owned subscriptions',()=>{
  const session=createViewSession(),closed=[];

@@ -4,7 +4,7 @@ import tempfile
 import unittest
 from pathlib import Path
 from unittest.mock import patch
-from workbench.archives import create_archive,read_archive
+from workbench.ops.archives import create_archive,read_archive
 from workbench.store import Store
 from workbench.runtime import Runtime
 
@@ -54,7 +54,7 @@ class ArchiveTests(unittest.TestCase):
         (self.workspace/'large.txt').write_text('too large')
         for path in ['../private.txt','link.txt','.env','large.txt']:
             self.store.emit(self.run_id,'file.changed',{'path':path})
-        with patch('workbench.archives.MAX_FILE',3):result=self.archive()
+        with patch('workbench.ops.archives.MAX_FILE',3):result=self.archive()
         self.assertEqual(result['file_count'],0);self.assertEqual(result['skipped_count'],4)
         manifest=json.loads((self.workspace/result['directory']/'清单.json').read_text())
         self.assertTrue(all(f['status']=='skipped' and f['reason'] for f in manifest['files']))

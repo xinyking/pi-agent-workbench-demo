@@ -7,3 +7,4 @@ dependencies = []
 
 [project.optional-dependencies]
 papers = ["pypdf>=6.0,<7"]
+evals = ["deepeval==4.3.2", "pypdf>=6.0,<7"]

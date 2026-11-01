@@ -1,0 +1,13 @@
+{
+  "schema_version": 1,
+  "repository": "https://github.com/earendil-works/pi",
+  "tag": "v1.3.0",
+  "commit": "71023aec1546d6d677a65669c5665c0927ce0dd0",
+  "vitest_evals_version": "0.15.0",
+  "files": {
+    "packages/evals/package.json": "27b212ba5619d80476ea641b79e8363eaeac45435cbcebfdb6857e9314e197b0",
+    "packages/evals/README.md": "544041208460422e2d1d4498b1b23c15650c414a22df9c54f899efd6c743f500",
+    "packages/evals/evals/extensions.docs.eval.ts": "cfe258b4c2dd89e38f10af064c2bec3fa1bc122772055d132fc24a61b3fb8002",
+    "packages/evals/src/harness.ts": "0bb64d688c31ff6b98d2f698b1aee3e4b116223899ffea35e09f39ba7ab94a4d"
+  }
+}

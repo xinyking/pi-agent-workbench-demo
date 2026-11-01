@@ -1,0 +1,8 @@
+{
+  "name": "workbench-pi-official-eval-comparison",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "vitest-evals": "0.15.0"
+  }
+}

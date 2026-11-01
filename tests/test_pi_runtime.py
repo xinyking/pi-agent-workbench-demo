@@ -45,6 +45,22 @@ class PiRuntimeTests(unittest.TestCase):
     def finish(self, run_id):
         self.wait(lambda: run_id not in self.runtime.active)
 
+    def test_usage_links_request_local_memory_and_keeps_cost_and_cache(self):
+        task = self.start('[observe] 验证可观测性')
+        self.finish(task)
+        events = self.store.events(task)
+        assembly = next(e for e in events if e['kind']=='memory.assembled')
+        usage = next(e for e in events if e['kind']=='usage')
+        self.assertEqual(usage['data']['assembly_id'], assembly['data']['assembly_id'])
+        self.assertEqual(usage['data']['attempt_id'], assembly['data']['attempt_id'])
+        self.assertEqual(usage['data']['cache_read_tokens'], 4)
+        self.assertEqual(usage['data']['cache_write_tokens'], 5)
+        self.assertEqual(usage['data']['cost_usd'], .0012)
+        self.assertTrue(assembly['data']['history_saved'])
+        self.assertIn('long_term_memory', assembly['data']['counts'])
+        snapshot = self.runtime.task_context.overview(task)['assemblies'][0]
+        self.assertEqual(snapshot['data']['attempt_id'], usage['data']['attempt_id'])
+
     def test_root_task_completes_with_explicit_report(self):
         run_id = self.start('完成一个任务')
         self.finish(run_id)

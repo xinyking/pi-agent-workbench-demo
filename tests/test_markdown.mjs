@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {markdownTokens,renderMarkdown,safeLink,paperReference,mathToken} from '../workbench/static/markdown.mjs';
+import {markdownTokens,renderMarkdown,safeLink,paperReference,mathToken} from '../workbench/static/js/markdown.mjs';
 class Node {
  constructor(tag,text=''){this.tag=tag;this.tagName=tag;this.textContent=text;this.children=[];this.dataset={};this.style={};this.attributes={};}
  setAttribute(name,value){this.attributes[name]=value;}

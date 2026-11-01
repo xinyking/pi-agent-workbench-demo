@@ -5,20 +5,22 @@ import json
 import threading
 import time
 import uuid
+from workbench.ops.usage import pi_usage
+from workbench.ops.billing import DeepseekBilling
 from pathlib import Path
-from .pi_client import PiClient, PiCancelled
-from .pi_config import PiConfig
+from workbench.models.pi import PiClient, PiCancelled
+from workbench.models.config import PiConfig
 from .agent_registry import AgentRegistry
 from .conversations import Conversations
 from .planning import validate_plan, prepare_batch
 from .documents import Documents
-from .task_context import TaskContext
-from .memory_service import MemoryService
+from workbench.context.task import TaskContext
+from workbench.context.memory import MemoryService
 from .executors import Executors
-from .model_settings import ModelSettings
-from .source_packets import SourcePackets
+from workbench.models.settings import ModelSettings
+from workbench.context.sources import SourcePackets
 from .store import TERMINAL
-from .archives import create_archive,task_events
+from workbench.ops.archives import create_archive,task_events
 
 BUCKETS = {'queued': 'pending', 'running': 'running', 'stopping': 'running',
            'waiting_approval': 'attention', 'failed': 'attention', 'interrupted': 'attention',
@@ -34,6 +36,7 @@ class Runtime:
         self.client_factory = PiClient
         self.mode = 'pi'
         self.closed = False
+        self.billing = DeepseekBilling(self)
         self._documents = Documents(store)
         self._conversations = Conversations(self)
         self._memory = MemoryService(self)
@@ -400,7 +403,9 @@ class Runtime:
                             emit('agent.definition_created', {'name':result['name'], 'description':result['description']})
                         elif event['title']=='__workbench_memory__':
                             action = payload.get('action')
-                            if action == 'assemble': result = self.task_context.assemble(run_id, agent_id)
+                            if action == 'assemble':
+                                result = self.task_context.assemble(run_id, agent_id, attempt)
+                                state['assembly_id'] = result.get('assembly_id')
                             elif action == 'offload': result = self.task_context.offload(run_id, agent_id, payload)
                             else: result = self.task_context.tool(run_id, payload, agent_id)
                         elif event['title']=='__workbench_document__':result=self.sources.tool(run_id,payload) if self.sources.get(run_id) else self.documents.tool(self.documents.for_task(run_id),payload)
@@ -474,8 +479,7 @@ class Runtime:
                 state['error'] = message.get('errorMessage', 'Pi 模型请求失败') if message.get('stopReason') == 'error' else None
                 state['aborted'] = message.get('stopReason') == 'aborted'
                 emit('message.completed', {'text': state['text']})
-                usage = message.get('usage', {})
-                emit('usage', {'model': message.get('model', run['model']), 'prompt_tokens': usage.get('input', 0), 'completion_tokens': usage.get('output', 0), 'total_tokens': usage.get('totalTokens', 0)})
+                emit('usage', {**pi_usage(message, run['model']), 'assembly_id': state.pop('assembly_id', None)})
             elif kind == 'tool_execution_start':
                 state['calls'][event['toolCallId']] = event
                 if event['toolName'] in ('write', 'edit'):

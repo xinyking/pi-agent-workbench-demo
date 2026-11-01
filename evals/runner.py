@@ -25,7 +25,9 @@ def digest(path):return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
 def source_manifest():
-    paths=[ROOT/'pyproject.toml',ROOT/'scripts/run_evals.py',*sorted((ROOT/'workbench').rglob('*.py')),*sorted((ROOT/'workbench/pi').rglob('*.ts')),*sorted((ROOT/'evals').rglob('*.py')),*sorted(CASE_DIR.glob('*.json')),*sorted((ROOT/'.pi/agents').glob('*.md')),*sorted((ROOT/'workbench/pi/vendor').glob('LICENSE*'))]
+    eval_python=sorted(p for p in (ROOT/'evals').rglob('*.py') if 'node_modules' not in p.parts)
+    official_files=[ROOT/'evals/pi_official'/name for name in ['package.json','package-lock.json','reference.json','judge.mjs']]
+    paths=[ROOT/'pyproject.toml',ROOT/'scripts/run_evals.py',ROOT/'scripts/run_deepeval.py',ROOT/'scripts/compare_pi_evals.py',ROOT/'evals/deepeval_profile.json',ROOT/'evals/requirements.lock',*official_files,*sorted((ROOT/'workbench').rglob('*.py')),*sorted((ROOT/'workbench/pi').rglob('*.ts')),*eval_python,*sorted(CASE_DIR.glob('*.json')),*sorted((ROOT/'.pi/agents').glob('*.md')),*sorted((ROOT/'workbench/pi/vendor').glob('LICENSE*'))]
     files={str(p.relative_to(ROOT)):digest(p) for p in paths}
     return {'sha256':hashlib.sha256(json.dumps(files,sort_keys=True).encode()).hexdigest(),'files':files,'schema_version':1,'python':sys.version.split()[0],'sqlite':sqlite3.sqlite_version,'platform':platform.platform(),'model':'deterministic-rpc-peer','pi_version':None,'network_model_calls':False}
 
@@ -145,7 +147,7 @@ def run_suite(names,output,repeat=1,variant='good',timeout=20):
             for case in cases:
                 row,evidence=run_trial(case,variant,timeout);row.update(trial=trial+1,source_sha256=manifest['sha256'],case_sha256=digest(CASE_DIR/(case['id']+'.json')))
                 name=f"{case['id']}-{trial+1}";(output/(name+'.json')).write_text(json.dumps(evidence,ensure_ascii=False,indent=2))
-                row['evidence']=name+'.json';stream.write(json.dumps(row,ensure_ascii=False)+'\n');stream.flush();rows.append(row)
+                row['evidence']=name+'.json';row['evidence_sha256']=digest(output/row['evidence']);stream.write(json.dumps(row,ensure_ascii=False)+'\n');stream.flush();rows.append(row)
     unchanged=source_manifest()['sha256']==manifest['sha256']
     summary={'schema_version':1,'level':'offline-pipeline','trials':len(rows),'passed':sum(r['verdict']=='passed' for r in rows),'failed':sum(r['verdict']=='failed' for r in rows),'blocked':sum(r['verdict']=='blocked' for r in rows),'skipped':sum(r['verdict']=='skipped' for r in rows),'source_unchanged':unchanged,'model_quality_conclusion':None,'task_success_uplift':None,'tokens':None,'cost':None}
     (output/'summary.json').write_text(json.dumps(summary,ensure_ascii=False,indent=2))

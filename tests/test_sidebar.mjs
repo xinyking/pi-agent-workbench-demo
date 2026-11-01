@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {reconcileSidebar} from '../workbench/static/sidebar.mjs';
+import {reconcileSidebar} from '../workbench/static/js/sidebar.mjs';
 class Element{
  constructor(){this.children=[];this.dataset={};this.scrollTop=0;}
  contains(node){return this===node||this.children.some(c=>c.contains(node));}

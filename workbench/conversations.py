@@ -4,7 +4,7 @@ import json
 import threading
 import time
 import uuid
-from .pi_client import PiCancelled
+from workbench.models.pi import PiCancelled
 
 
 class Conversations:
@@ -50,7 +50,15 @@ class Conversations:
     def execution(self, conversation_id, kind, data=None):
         # Only observable metadata: never publish thinking, tool output or file bodies.
         data=data or {}
-        safe={key:data[key] for key in ('agent_id','parent_agent_id','role','name','id','status','is_error','path') if key in data}
+        safe={key:data[key] for key in ('agent_id','parent_agent_id','role','name','id','status','is_error','path','attempt_id') if key in data}
+        # Numeric usage and model identifiers are observable metadata, not text/output.
+        if kind in ('model.completed','usage'):
+            import math
+            for key in ('prompt_tokens','completion_tokens','cache_read_tokens','cache_write_tokens','total_tokens','cost_usd'):
+                value=data.get(key)
+                if value is None or type(value) in (int,float) and math.isfinite(value) and value>=0:safe[key]=value
+            for key in ('model','provider','source','cost_source','stop_reason'):
+                if isinstance(data.get(key),str):safe[key]=self.runtime.config.redact(data[key][:200])
         if isinstance(data.get('arguments'),dict):
             safe['arguments']={k:v for k,v in data['arguments'].items() if k in ('action','document_id','page','path','offset') and isinstance(v,(str,int))}
         if kind=='plan.updated':safe['steps']=[{k:s[k] for k in ('id','title','agent','status') if k in s} for s in data.get('steps',[])]
@@ -209,7 +217,7 @@ class Conversations:
             with self.store.lock:rows=self.store.db.execute('SELECT id,mode FROM conversations WHERE task_id=?',(task_id,)).fetchall()
             for row in rows:
                 chat_id=row['id']
-                if row['mode']=='planning' and kind in ('status','agent.started','agent.status','agent.completed','session.connected','message.started','tool.started','tool.completed','file.changed','plan.updated'):
+                if row['mode']=='planning' and kind in ('status','agent.started','agent.status','agent.completed','session.connected','message.started','message.completed','usage','tool.started','tool.completed','file.changed','plan.updated'):
                     self.execution(chat_id,kind,data)
                 if kind=='status':
                     self.event(chat_id,'task.status',{'task_id':task_id,**data})
@@ -228,6 +236,7 @@ class Conversations:
         def on_event(event):
             nonlocal message_id,text,settled,error,compact_requested
             kind=event.get('type')
+            if kind=='turn_start':self.execution(chat_id,'model.started')
             if kind=='tool_execution_start':self.execution(chat_id,'tool.started',{'id':event.get('toolCallId'),'name':event.get('toolName'),'arguments':event.get('args',{})})
             elif kind=='tool_execution_end':self.execution(chat_id,'tool.completed',{'id':event.get('toolCallId'),'name':event.get('toolName'),'is_error':event.get('isError',False)})
             if kind=='message_start' and event.get('message',{}).get('role')=='assistant':
@@ -240,6 +249,8 @@ class Conversations:
                 self.update_message(chat_id,message_id,text)
             elif kind=='message_end' and event.get('message',{}).get('role')=='assistant':
                 message=event['message'];text=''.join(p.get('text','') for p in message.get('content',[]) if p.get('type')=='text')
+                from workbench.ops.usage import pi_usage
+                self.execution(chat_id,'model.completed',pi_usage(message))
                 if message_id is None:message_id=self.message(chat_id,'assistant','','streaming')
                 self.update_message(chat_id,message_id,text,'completed')
                 if message.get('stopReason')=='error':error=message.get('errorMessage','Pi 请求失败')
@@ -310,8 +321,9 @@ class Conversations:
             if message_id is not None:
                 with self.store.lock,self.store.db:self.store.db.execute("UPDATE conversation_messages SET status='interrupted' WHERE id=? AND status='streaming'",(message_id,))
             with self.lock:
-                self.active.pop(chat_id,None)
+                self.execution(chat_id,'request.completed',{'status':'completed' if final_status=='idle' else final_status})
                 self.status(chat_id,final_status)
+                self.active.pop(chat_id,None)
 
     def cancel(self, conversation_id):
         with self.lock:

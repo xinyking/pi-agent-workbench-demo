@@ -6,7 +6,7 @@ import unittest
 from http.server import BaseHTTPRequestHandler,ThreadingHTTPServer
 from pathlib import Path
 from unittest.mock import patch
-from workbench.model_discovery import fetch_models
+from workbench.models.discovery import fetch_models
 from workbench.runtime import Runtime
 from workbench.store import Store
 
@@ -52,13 +52,13 @@ class DiscoveryTests(unittest.TestCase):
   self.mode='empty';self.assertEqual(self.fetch()['models'],[])
   self.mode='echo';self.assertNotIn('secret-never-display',json.dumps(self.fetch()))
   self.mode='large'
-  with patch('workbench.model_discovery.MAX_BYTES',128),self.assertRaises(ValueError):self.fetch()
+  with patch('workbench.models.discovery.MAX_BYTES',128),self.assertRaises(ValueError):self.fetch()
   self.mode='many'
-  with patch('workbench.model_discovery.MAX_MODELS',2):result=self.fetch()
+  with patch('workbench.models.discovery.MAX_MODELS',2):result=self.fetch()
   self.assertEqual(len(result['models']),2);self.assertTrue(result['truncated'])
  def test_timeout_and_repeated_cursor_are_bounded(self):
   self.mode='slow'
-  with patch('workbench.model_discovery.TIMEOUT',.05),self.assertRaises(ValueError):self.fetch()
+  with patch('workbench.models.discovery.TIMEOUT',.05),self.assertRaises(ValueError):self.fetch()
   self.mode='loop'
   with self.assertRaises(ValueError):self.fetch('anthropic-messages')
  def test_saved_key_scope_revision_and_no_persistence(self):

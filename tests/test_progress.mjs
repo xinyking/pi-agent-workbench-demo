@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {buildProgress} from '../workbench/static/progress.mjs';
+import {buildProgress} from '../workbench/static/js/progress.mjs';
 test('progress follows actual document calls and streamed answer events',()=>{
  const chat={status:'running',mode:'chat',documents:[{id:'paper',name:'论文.pdf'}],execution:[{kind:'request.started'},{kind:'session.connected'},{kind:'tool.started',name:'workbench_document',arguments:{action:'read',document_id:'paper',page:3}}]};
  assert.equal(buildProgress(chat).label,'读取《论文.pdf》 · 第 3 页');

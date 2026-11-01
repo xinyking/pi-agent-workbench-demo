@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { buildFlow } from '../workbench/static/flow.mjs';
+import { buildFlow } from '../workbench/static/js/flow.mjs';
 const run={prompt:'找工作',status:'waiting_input'};
 const root={id:'main',role:'主 Agent',task:'分析目标',status:'running',data:{attempt_id:'a'}};
 const agents=[root,{id:'one',role:'task-scout',task:'调查',status:'waiting_input',parent_id:'main',data:{attempt_id:'a'}},{id:'two',role:'task-reviewer',task:'审查',status:'completed',parent_id:'main',data:{attempt_id:'a'}}];
@@ -31,13 +31,17 @@ test('Mermaid labels cannot introduce nodes or markup',()=>{
  assert.equal(flow.nodes.find(n=>n.id==='finish').status,'completed');
  assert.ok(flow.mermaid.startsWith('flowchart LR'));
 });
+test('a submitted report is not hidden when task completion checks fail',()=>{
+ const graph=buildFlow({...run,status:'failed'},[{...root,status:'completed'}],[],[{id:10,kind:'task.reported',data:{agent_id:'main',attempt_id:'a',summary:'报告已交付'}}]);
+ const finish=graph.nodes.find(n=>n.id==='finish');assert.equal(finish.status,'failed');assert.match(finish.text,/已提交完成报告/);
+});
 test('a root question after delegation stays after that batch',()=>{
  const question={id:'late',agent_id:'main',status:'pending',created:20,data:{question:'补充目标城市',attempt_id:'a'}};
  const graph=buildFlow(run,agents,[question],[{...batch,id:10,created:10}]);
  assert.ok(graph.rows.findIndex(r=>r.some(n=>n.id==='input-late'))>graph.rows.findIndex(r=>r.some(n=>n.id==='agent-one')));
 });
 test('stage evidence is scoped by attempt and event boundaries',async()=>{
- const {eventsForNode}=await import('../workbench/static/flow.mjs');
+ const {eventsForNode}=await import('../workbench/static/js/flow.mjs');
  const scope={agentId:'main',attemptId:'a',fromId:10,toId:20};
  const events=[{id:11,data:{agent_id:'main',attempt_id:'a'}},{id:21,data:{agent_id:'main',attempt_id:'a'}},{id:12,data:{agent_id:'main',attempt_id:'old'}},{id:13,data:{agent_id:'one',attempt_id:'a'}}];
  assert.deepEqual(eventsForNode(scope,events).map(e=>e.id),[11]);

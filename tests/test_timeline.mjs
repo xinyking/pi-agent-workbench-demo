@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {buildTimeline} from '../workbench/static/timeline.mjs';
+import {buildTimeline} from '../workbench/static/js/timeline.mjs';
 const event=(id,agent_id,kind,more={})=>({id,created:id,kind,data:{agent_id,attempt_id:'round',...more}});
 test('interleaved agents merge within an attempt and pair tool results',()=>{
  const events=[event(1,'main','tool.started',{id:'delegate',name:'workbench_delegate'}),event(2,'child','agent.started',{role:'researcher'}),event(3,'child','tool.started',{id:'read',name:'read'}),event(4,'main','agent.status',{status:'running'}),event(5,'child','tool.completed',{id:'read',name:'read'}),event(6,'main','tool.completed',{id:'delegate',name:'workbench_delegate'}),event(7,'main','task.reported')];

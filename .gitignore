@@ -7,6 +7,9 @@ __pycache__/
 artifacts/
 
 .venv-ui/
+.venv-evals/
+.deepeval/
+evals/pi_official/node_modules/
 
 # Local credentials and runtime configuration
 .env.*
